@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Timer</title>
+  <link rel="manifest" href="manifest.json" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f9f9f9;
+      max-width: 480px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #007aff;
+    }
+    .task {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .task.in-progress {
+      border-left: 5px solid #007aff;
+    }
+    .task.completed {
+      opacity: 0.6;
+    }
+    button {
+      padding: 10px;
+      margin-top: 10px;
+      width: 100%;
+      background: #007aff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .small-btn {
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      background: #34c759;
+      color: white;
+      border: none;
+      margin-left: 10px;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Task Timer</h1>
+  <input type="text" id="taskInput" placeholder="Enter new task..." />
+  <button onclick="addTask()">Add Task</button>
+  <div id="taskList"></div>
+
+  <script>
+    let tasks = [];
+    let activeTaskId = null;
+    let timerInterval = null;
+
+    function saveTasks() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+      localStorage.setItem('activeTaskId', activeTaskId);
+    }
+
+    function loadTasks() {
+      const savedTasks = localStorage.getItem('tasks');
+      const savedActiveId = localStorage.getItem('activeTaskId');
+      if (savedTasks) {
+        tasks = JSON.parse(savedTasks);
+        activeTaskId = savedActiveId ? parseInt(savedActiveId) : null;
+        if (activeTaskId !== null) startTimer();
+      }
+    }
+
+    function addTask() {
+      const name = document.getElementById('taskInput').value.trim();
+      if (!name) return;
+
+      const id = Date.now();
+      tasks.push({ id, name, startTime: null, duration: 0, status: 'pending' });
+      document.getElementById('taskInput').value = '';
+      saveTasks();
+      renderTasks();
+    }
+
+    function activateTask(id) {
+      const newTask = tasks.find(t => t.id === id);
+      if (newTask.status === 'completed') return;
+
+      if (activeTaskId !== null && activeTaskId !== id) {
+        const currentTask = tasks.find(t => t.id === activeTaskId);
+        if (currentTask && currentTask.status === 'in-progress') {
+          completeTask(activeTaskId);
+        }
+      }
+
+      newTask.status = 'in-progress';
+      newTask.startTime = Date.now();
+      activeTaskId = id;
+      startTimer();
+      saveTasks();
+      renderTasks();
+    }
+
+    function completeTask(id) {
+      const task = tasks.find(t => t.id === id);
+      if (task && task.status === 'in-progress') {
+        task.duration += Math.floor((Date.now() - task.startTime) / 1000);
+        task.status = 'completed';
+        task.startTime = null;
+        activeTaskId = null;
+        clearInterval(timerInterval);
+        saveTasks();
+      }
+    }
+
+    function stopTask(id) {
+      const task = tasks.find(t => t.id === id);
+      if (task && task.status === 'in-progress') {
+        task.duration += Math.floor((Date.now() - task.startTime) / 1000);
+        task.status = 'pending';
+        task.startTime = null;
+        activeTaskId = null;
+        clearInterval(timerInterval);
+        saveTasks();
+        renderTasks();
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        renderTasks();
+      }, 1000);
+    }
+
+    function formatTime(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      return \`\${h.toString().padStart(2,'0')}:\${m.toString().padStart(2,'0')}:\${s.toString().padStart(2,'0')}\`;
+    }
+
+    function renderTasks() {
+      const container = document.getElementById('taskList');
+      container.innerHTML = '';
+      tasks.forEach(task => {
+        const div = document.createElement('div');
+        div.className = \`task \${task.status}\`;
+        let duration = task.duration;
+        if (task.status === 'in-progress') {
+          duration += Math.floor((Date.now() - task.startTime) / 1000);
+        }
+        div.innerHTML = \`
+          <div>
+            <strong>\${task.name}</strong><br/>
+            ⏱ \${formatTime(duration)}
+          </div>
+          <div>
+            \${task.status === 'pending' ? \`<button class="small-btn" onclick="activateTask(\${task.id})">Start</button>\` : ''}
+            \${task.status === 'in-progress' ? \`<button class="small-btn" onclick="stopTask(\${task.id})">Stop</button>\` : ''}
+          </div>
+        \`;
+        container.appendChild(div);
+      });
+    }
+
+    loadTasks();
+    renderTasks();
+  </script>
+</body>
+</html>
